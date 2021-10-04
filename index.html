@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>电梯调度模拟器</title>
+</head>
+<style>
+  @font-face {
+    font-family: 'LED';
+    src: url(./font/led.eot);
+    src: url(./font/led.eot?#iefix)format('embedded-opentype'),
+      url('./font/led.woff') format('woff'),
+      local('LED'), url("./font/led.woff");
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+  }
+
+  form {
+    display: flex;
+    margin-bottom: 30px;
+    flex-direction: column;
+  }
+
+  input {
+    margin: 10px 0;
+    padding: 5px;
+  }
+
+  button {
+    padding: 5px;
+  }
+
+  #panel {
+    display: flex;
+  }
+
+  #setting-panel {
+    background-color: orange;
+  }
+
+  #outside-panel {
+    background-color: skyblue;
+  }
+
+  #inside-panel {
+    background-color: pink;
+  }
+
+  .panel {
+    padding: 20px;
+    text-align: center;
+    position: relative;
+  }
+
+  .screen {
+    margin: 10px 0;
+    padding: 7px 18px;
+    background-color: #000;
+    border-radius: 5px;
+    color: red;
+    text-align: right;
+    font-size: 60px;
+    font-family: 'LED';
+  }
+
+
+  #inside-buttons {
+    width: 126px;
+    display: flex;
+    flex-wrap: wrap-reverse;
+    justify-content: center;
+  }
+
+  #outside-buttons {
+    width: 126px;
+    margin-bottom: 30px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .initBtn {
+    width: 100%;
+  }
+
+  .direction {
+    left: 37px;
+    top: 74px;
+    width: 20px;
+    height: 20px;
+    position: absolute;
+    border-radius: 50%;
+    background-color: #fff;
+  }
+
+  .directionBtn {
+    width: 40px;
+    height: 40px;
+    margin: 5px 10px;
+    font-size: 20px;
+    border-radius: 50%;
+  }
+
+  .floorBtn {
+    width: 35px;
+    height: 35px;
+    margin: 2px;
+    font-size: 20px;
+    border-radius: 25%;
+  }
+</style>
+
+<body>
+  <div id="panel">
+    <div id="setting-panel" class="panel">
+      <h3>设置面板</h3>
+      <form name="settings">
+        <input type="number" name="总楼层" id="floors" placeholder="请输入总楼层：">
+        <input type="number" name="地下楼层" id="underFloor" placeholder="请输入最低楼层：">
+        <input type="number" name="当前楼层" id="curFloor" placeholder="请输入当前楼层：">
+        <input type="number" name="所在楼层" id="yourFloor" placeholder="请输入您所在楼层：">
+        <input type="number" name="电梯速度" id="speed" placeholder="请输入电梯速度：">
+        <input type="number" name="停留时间" id="duration" placeholder="请输入电梯停留时间：">
+      </form>
+      <button class="initBtn" onclick="init()">开始模拟</button>
+    </div>
+    <div id="outside-panel" class="panel">
+      <h3>外部控制面板</h3>
+      <span class="direction"></span>
+      <div id="outside-screen" class="screen">
+        <span class="curFloor">100</span>
+      </div>
+
+      <div id="outside-buttons">
+
+      </div>
+      <span class="yourFloor"></span>
+    </div>
+    <div id="inside-panel" class="panel">
+      <h3>内部控制面板</h3>
+      <span class="direction"></span>
+      <div id="inside-screen" class="screen">
+        <span class="curFloor">100</span>
+      </div>
+      <div id="inside-buttons">
+
+      </div>
+    </div>
+  </div>
+</body>
+
+<script>
+  var floors                    //总楼层
+  var underFloor                //最低楼层
+  var curFloor                  //电梯所在楼层
+  var tarFloor                  //目标楼层
+  var yourFloor                 //人所在楼层
+  var speed                     //运行速度
+  var duration                  //电梯停留时间
+  var status = 0                //运行状态
+  var floorPlan = new Array();  //创建调度表
+  var timer = null              //创建定时器
+  // init()
+  /* 初始化 */
+  function init() {
+    floors = settings.floors.value - '0' || 26
+    underFloor = settings.underFloor.value - '0' || -1
+    curFloor = settings.curFloor.value - '0' || 12
+    yourFloor = settings.yourFloor.value - '0' || 7
+    speed = settings.speed.value - '0' || 1
+    duration = settings.duration.value - '0' || 3
+    setScreen(curFloor, '-')
+    initYourPos(yourFloor)
+    initBtns(floors)
+    if (yourFloor == underFloor) {
+      document.querySelector('.downBtn').disabled = true
+      document.querySelector('.upBtn').disabled = false
+    } else if (yourFloor == floors) {
+      document.querySelector('.upBtn').disabled = true
+      document.querySelector('.downBtn').disabled = false
+    } else {
+      document.querySelector('.downBtn').disabled = false
+      document.querySelector('.upBtn').disabled = false
+    }
+  }
+  /* 设置屏幕显示楼层 */
+  function setScreen(context) {
+    if (context == 0) return
+    let screen = document.querySelectorAll('.screen')
+    screen[0].innerHTML = screen[1].innerHTML = context
+    let directionBox = document.querySelectorAll('.direction')
+    if (status == 1) {
+      directionBox[0].style.backgroundColor = directionBox[1].style.backgroundColor = 'red'
+    } else if (status == -1) {
+      directionBox[0].style.backgroundColor = directionBox[1].style.backgroundColor = '#28FF28'
+    } else {
+      directionBox[0].style.backgroundColor = directionBox[1].style.backgroundColor = 'orange'
+    }
+  }
+
+  /* 初始化人所在楼层 */
+  function initYourPos(num) {
+    document.querySelector('.yourFloor').innerHTML = '这里是 ' + num + ' F'
+  }
+
+  /* 初始化楼层按钮 */
+  function initBtns(num) {
+    document.querySelector('#outside-buttons').innerHTML = `<button class="directionBtn upBtn floorup" onclick="upHandle()">上</button>
+        <button class="directionBtn downBtn floordown" onclick="downHandle()">下</button>`
+    let btnsBox = document.querySelector('#inside-buttons')
+    let btnsHtml = ``
+    for (let i = underFloor; i <= num; ++i) {
+      if (i == 0) continue
+      btnsHtml += `<button onClick="clickHandle(${i})" ondblClick="dbClickHandle(${i})" class="floorBtn floor${i}">${i}</button>`
+    }
+    btnsBox.innerHTML = btnsHtml
+  }
+
+  /* 双击取消操作 */
+  function dbClickHandle(floor) {
+    /* 阻止单击事件 */
+    clearTimeout(timer)
+    setOffLight(floor)
+  }
+
+  /* 点击按钮操作 */
+  function clickHandle(e) {
+    clearTimeout(timer)
+    if (e == curFloor) return
+    timer = setTimeout(() => {
+      setOnLight(e)
+      if (status == 0) {
+        tarFloor = e
+        if (e > curFloor) {
+          status = 1
+          up()
+        }
+        else if (e < curFloor) {
+          status = -1
+          down()
+        }
+        else {
+          open()
+        }
+      }
+      else {
+        addPlan(e)
+      }
+    }, 500);
+  }
+
+  /* 添加调度 */
+  function addPlan(e) {
+    /* 1.只有处在运行方向上的楼层才进行调度，否则不进行处理 */
+    if (status * e < curFloor * status) return
+    /* 2.当调度表中无任何等待调度的楼层 */
+    if (floorPlan.length == 0) {
+      /* 如果当前点击楼层高于目标楼层 */
+      if (status * e > tarFloor * status) {
+        floorPlan[0] = e;       //高楼层   先入栈
+        floorPlan[1] = tarFloor;//目标楼层 后入栈
+      }
+      /* 如果当前点击楼层低于目标楼层 */
+      if (status * e < tarFloor * status) {
+        floorPlan[0] = tarFloor;//目标楼层 先入栈
+        floorPlan[1] = e;       //低楼层   后入栈
+      }
+    }
+    /* 3.当调度表中存在等待调度的楼层 */
+    else {
+      let i
+      /* 遍历调度表 */
+      for (i = 0; i < floorPlan.length; i++) {
+        /* 3.1 如果当前点击楼层已存在于调度表，则不进行处理 */
+        if (e == floorPlan[i]) return;
+        /* 3.2 如果当前点击楼层高于调度表中某一等待调度楼层，则将点击楼层插入该楼层之后 */
+        if (status * e > floorPlan[i] * status) {
+          for (let j = floorPlan.length; j > i; j--) { floorPlan[j] = floorPlan[j - 1]; }
+          floorPlan[i] = e;
+          break;
+        }
+      }
+      if (i == floorPlan.length) floorPlan[i] = e;
+    }
+  }
+
+  /* 完成一项调度，出栈 */
+  function delPlan() {
+    floorPlan.length--;
+  }
+
+  /* 上行动作 */
+  function up() {
+    setScreen(++curFloor)
+    if (floorPlan.length == 0) {
+      if (tarFloor != curFloor) {
+        setTimeout('up()', speed * 1000);
+      }
+      else {
+        setScreen(curFloor)
+        setOffAllLight()
+        status = 0
+        open()
+      }
+    }
+    else {
+      if (floorPlan[floorPlan.length - 1] == curFloor) {
+        setOffLight(curFloor);
+        open()
+        delPlan();
+        if (floorPlan.length == 0) {
+          setOffAllLight();
+          setScreen(curFloor);
+          status = 0;
+        }
+        else {
+          setTimeout("up()", speed * 2000);
+        }
+      }
+      else {
+        setTimeout("up()", speed * 1000);
+      }
+    }
+  }
+
+  /* 下行动作 */
+  function down() {
+    setScreen(--curFloor)
+    if (floorPlan.length == 0) {
+      if (tarFloor != curFloor) {
+        setTimeout('down()', speed * 1000);
+      }
+      else {
+        setScreen(curFloor)
+        setOffAllLight()
+        status = 0
+        open()
+      }
+    }
+    else {
+      if (floorPlan[floorPlan.length - 1] == curFloor) {
+        setOffLight(curFloor);
+        open()
+        delPlan();
+        if (floorPlan.length == 0) {
+          setOffAllLight();
+          setScreen(curFloor);
+          status = 0;
+        }
+        else {
+          setTimeout("down()", speed * 2000);
+        }
+      }
+      else {
+        setTimeout("down()", speed * 1000);
+      }
+    }
+  }
+
+  /* 开关门操作 */
+  function open() {
+    console.log('OPEN')
+    setTimeout(`setScreen(${curFloor})`, duration * 1000)
+  }
+
+  /* 亮灯控制 */
+  function setOnLight(e) {
+    if (e == 0) return
+    document.querySelector(`.floor${e}`).style.color = 'red'
+  }
+
+  /* 灭灯控制 */
+  function setOffLight(e) {
+    if (e == 0) return
+    document.querySelector(`.floor${e}`).style.color = '#000'
+  }
+
+  /* 灭所有灯控制 */
+  function setOffAllLight() {
+    tarFloor = null
+    setOffLight('up')
+    setOffLight('down')
+    for (let i = underFloor; i <= floors; ++i)  setOffLight(i);
+  }
+
+  /* 上行按钮控制 */
+  function upHandle() {
+    setOnLight(yourFloor)
+    /* 1.电梯处在最高层，则不进行处理，其实也不会出现该按钮 */
+    if (yourFloor == floors) return
+    /* 2.电梯处于静止状态 */
+    if (status == 0) {
+      tarFloor = yourFloor
+      /* 2.1 电梯在低楼层，则上行至人所在楼层 */
+      if (curFloor < yourFloor) {
+        status = 1
+        setTimeout('up()', speed * 1000);
+      }
+      /* 2.2 电梯在高楼层，则下行至人所在楼层 */
+      else if (curFloor > yourFloor) {
+        status = -1
+        setTimeout('down()', speed * 1000);
+      }
+      /* 2.3 电梯已经在人所在楼层，停止电梯 */
+      else {
+        setOffLight(yourFloor)
+        open()
+      }
+    }
+    else {
+      addPlan(yourFloor)
+    }
+  }
+
+  /* 下行按钮控制 */
+  function downHandle() {
+    setOnLight(yourFloor)
+    /* 1.电梯处在最高层，则不进行处理，其实也不会出现该按钮 */
+    if (yourFloor == floors) return
+    /* 2.电梯处于静止状态 */
+    if (status == 0) {
+      tarFloor = yourFloor
+      /* 2.1 电梯在低楼层，则上行至人所在楼层 */
+      if (curFloor < yourFloor) {
+        status = 1
+        setTimeout('up()', speed * 1000);
+      }
+      /* 2.2 电梯在高楼层，则下行至人所在楼层 */
+      else if (curFloor > yourFloor) {
+        status = -1
+        setTimeout('down()', speed * 1000);
+      }
+      /* 2.3 电梯已经在人所在楼层，停止电梯 */
+      else {
+        setOffLight(yourFloor)
+        open()
+      }
+    }
+    else {
+      addPlan(yourFloor)
+    }
+  }
+</script>
+
+</html>
